@@ -51,7 +51,7 @@ class PruneEmptyCommitsSpec extends Specification {
       val (commitsThatOnlyTouchFoo, commitsThatTouchNonFooFiles) = commitHist().partition(c => onlyTouchesPath(c, _.endsWith("foo")))
 
       ensureRemovalOf(commitHistory(haveFile("foo").atLeastOnce)) {
-        run("--delete-files foo --no-blob-protection --prune-empty-commits")
+        run("--delete-files foo --no-blob-protection --private --prune-empty-commits")
       }
 
       def commitsEqualByAuthorIdent(a: Commit,b: Commit) = a.node.author == b.node.author
