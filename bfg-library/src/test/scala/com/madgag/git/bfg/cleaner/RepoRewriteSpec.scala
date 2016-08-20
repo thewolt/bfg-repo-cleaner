@@ -31,7 +31,7 @@ import com.madgag.git.bfg.cleaner.ObjectIdSubstitutor._
 import com.madgag.git.bfg.cleaner.protection.ProtectedObjectCensus
 import com.madgag.git.bfg.model.TreeBlobEntry
 import com.madgag.git.test._
-import com.madgag.textmatching.Literal
+import com.madgag.textmatching.{Glob, Literal, TextMatcher}
 import com.madgag.textmatching.RegexReplacer._
 import org.apache.commons.io.FilenameUtils
 import org.eclipse.jgit.lib.ObjectId
@@ -159,5 +159,19 @@ class RepoRewriteSpec extends Specification {
     "handle ASCII in ISO-8859-1" in textReplacementOf("ISO-8859-1", "laparabla", "txt", "palpitando", "buscando")
 
     "handle converting Windows newlines to Unix" in textReplacementOf("newlines", "windows", "txt", "\r\n", "\n")
+  }
+
+
+  "CRLF Fixer" should {
+    "handle java file" in {
+      implicit val repo = unpackRepo("/sample-repos/mixedEol.git.zip")
+
+      val crlfFixer = new FixCrlfConverter(TextMatcher(Glob, "*.java")) {
+        val threadLocalObjectDBResources = repo.getObjectDatabase.threadLocalResources
+      }
+      RepoRewriter.rewrite(repo, ObjectIdCleaner.Config(ProtectedObjectCensus.None, treeBlobsCleaners = Seq(crlfFixer)))
+
+      repo.resolve(s"master:src/main/java/WinFile.java").name() should_==  "c9c2a5c7139d5ceea92d5f196e217be19c447ba9"
+    }
   }
 }

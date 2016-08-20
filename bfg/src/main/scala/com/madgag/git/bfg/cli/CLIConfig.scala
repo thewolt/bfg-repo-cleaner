@@ -77,6 +77,9 @@ object CLIConfig {
     opt[String]("convert-to-git-lfs").text("extract files with the specified names (eg '*.{zip,mp4}') into Git LFS").action {
       (v, c) => c.copy(lfsConversion = Some(v))
     }
+    fileMatcher("fix-crlf").text("remove CRLF on the files with the specified names").action {
+      (v, c) => c.copy(fixCRLF = Some(v))
+    }
     opt[File]("replace-text").abbr("rt").valueName("<expressions-file>").text("filter content of files, replacing matched text. Match expressions should be listed in the file, one expression per line - " +
       "by default, each expression is treated as a literal, but 'regex:' & 'glob:' prefixes are supported, with '==>' to specify a replacement " +
       "string other than the default of '***REMOVED***'.").action {
@@ -128,6 +131,7 @@ case class CLIConfig(stripBiggestBlobs: Option[Int] = None,
                      deleteFiles: Option[TextMatcher] = None,
                      deleteFolders: Option[TextMatcher] = None,
                      fixFilenameDuplicatesPreferring: Option[Ordering[FileMode]] = None,
+                     fixCRLF: Option[TextMatcher] = None,
                      filenameFilters: Seq[Filter[String]] = Nil,
                      filterSizeThreshold: Int = BlobTextModifier.DefaultSizeThreshold,
                      textReplacementExpressions: Traversable[String] = List.empty,
@@ -180,6 +184,14 @@ case class CLIConfig(stripBiggestBlobs: Option[Int] = None,
     new LfsBlobConverter(lfsGlobExpr, repo)
   }
 
+  lazy val fixCRLFConverter: Option[TreeBlobModifier] = fixCRLF.map {
+    textMatcher => new FixCrlfConverter(textMatcher) {
+      val threadLocalObjectDBResources = repo.getObjectDatabase.threadLocalResources
+    }
+  }
+
+
+
   lazy val privateDataRemoval = sensitiveData.getOrElse(Seq(fileDeletion, folderDeletion, blobTextModifier).flatten.nonEmpty)
 
   lazy val objectIdSubstitutor = if (privateDataRemoval) ObjectIdSubstitutor.OldIdsPrivate else ObjectIdSubstitutor.OldIdsPublic
@@ -217,7 +229,7 @@ case class CLIConfig(stripBiggestBlobs: Option[Int] = None,
       }
     }
 
-    Seq(blobsByIdRemover, blobRemover, fileDeletion, blobTextModifier, lfsBlobConverter).flatten
+    Seq(blobsByIdRemover, blobRemover, fileDeletion, blobTextModifier, lfsBlobConverter, fixCRLFConverter).flatten
   }
 
   lazy val definesNoWork = treeBlobCleaners.isEmpty && folderDeletion.isEmpty && treeEntryListCleaners.isEmpty
