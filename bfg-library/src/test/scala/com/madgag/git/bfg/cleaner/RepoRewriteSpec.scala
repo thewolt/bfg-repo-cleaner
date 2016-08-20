@@ -163,15 +163,28 @@ class RepoRewriteSpec extends Specification {
 
 
   "CRLF Fixer" should {
-    "handle java file" in {
-      implicit val repo = unpackRepo("/sample-repos/mixedEol.git.zip")
+    "convert Windows newlines to Unix" in {
+      implicit val repo = unpackRepo("/sample-repos/encodings.git.zip")
 
-      val crlfFixer = new FixCrlfConverter(TextMatcher(Glob, "*.java")) {
+      val crlfFixer = new FixCrlfConverter(TextMatcher(Glob, "*.txt")) {
         val threadLocalObjectDBResources = repo.getObjectDatabase.threadLocalResources
       }
       RepoRewriter.rewrite(repo, ObjectIdCleaner.Config(ProtectedObjectCensus.None, treeBlobsCleaners = Seq(crlfFixer)))
 
-      repo.resolve(s"master:src/main/java/WinFile.java").name() should_==  "c9c2a5c7139d5ceea92d5f196e217be19c447ba9"
+      val parentPath = "newlines"
+      val fileNamePrefix = "windows"
+      val fileNamePostfix = "txt"
+      val beforeAndAfter = Seq("\r\n", "\n").map(URLEncoder.encode(_, "UTF-8")).mkString("-")
+
+      val beforeFile = s"$parentPath/$fileNamePrefix-ORIGINAL.$fileNamePostfix"
+      val afterFile = s"$parentPath/$fileNamePrefix-MODIFIED-$beforeAndAfter.$fileNamePostfix"
+
+      val cleanedFile = repo.resolve(s"master:$beforeFile")
+      val expectedFile = repo.resolve(s"master:$afterFile")
+
+      expectedFile should not beNull
+
+      cleanedFile mustEqual expectedFile
     }
   }
 }
