@@ -14,3 +14,9 @@ alternative to `git-filter-branch` for cleansing bad data out of your Git reposi
 * Removing **Passwords, Credentials** & other **Private data**
 
 Main documentation for The BFG is here : **https://rtyley.github.io/bfg-repo-cleaner/**
+
+# Modifications on this fork
+
+* Merged `--prune-empty-commits` feature from `javabrett/repo-bfg-cleaner`
+* Add optimized fix for CRLF
+* Attempt to add `--keep-folders` option which is an inverted filter of `--delete-folders` that is only applied on the base tree of the commit
