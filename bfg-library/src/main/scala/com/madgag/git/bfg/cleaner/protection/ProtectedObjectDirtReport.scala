@@ -42,7 +42,7 @@ object ProtectedObjectDirtReport {
 
     for (protectedRevObj <- objectIdCleanerConfig.protectedObjectCensus.protectorRevsByObject.keys) yield {
       val originalContentTreeOrBlob = treeOrBlobPointedToBy(protectedRevObj)
-      val replacementTreeOrBlob = originalContentTreeOrBlob.fold(uncaringCleaner.cleanBlob.replacement, uncaringCleaner.cleanTree.replacement)
+      val replacementTreeOrBlob = originalContentTreeOrBlob.fold(uncaringCleaner.cleanBlob.replacement, id => uncaringCleaner.cleanTree.replacement(id) orElse uncaringCleaner.baseCleanTree.replacement(id))
       ProtectedObjectDirtReport(protectedRevObj, originalContentTreeOrBlob.merge, replacementTreeOrBlob)
     }
   }

@@ -54,7 +54,7 @@ case class Commit(node: CommitNode, arcs: CommitArcs) {
 }
 
 case class CommitArcs(parents: Seq[ObjectId], tree: ObjectId) {
-  def cleanWith(cleaner: ObjectIdCleaner) = CommitArcs(parents.map(cleaner.cleanCommit).filterNot(_ == ObjectId.zeroId()), cleaner.cleanTree(tree))
+  def cleanWith(cleaner: ObjectIdCleaner) = CommitArcs(parents.map(cleaner.cleanCommit).filterNot(_ == ObjectId.zeroId()), cleaner.baseCleanTree(tree))
 
   def isEmptyCommit(implicit revWalk: RevWalk) = parents match {
     case Seq() => tree == Tree.Empty.objectId

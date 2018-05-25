@@ -39,6 +39,7 @@ object ObjectIdCleaner {
                     treeEntryListCleaners: Seq[Cleaner[Seq[Tree.Entry]]] = Seq.empty,
                     treeBlobsCleaners: Seq[Cleaner[TreeBlobs]] = Seq.empty,
                     treeSubtreesCleaners: Seq[Cleaner[TreeSubtrees]] = Seq.empty,
+                    baseTreeSubtreesCleaners: Seq[Cleaner[TreeSubtrees]] = Seq.empty,
                     // messageCleaners? - covers both Tag and Commits
                     objectChecker: Option[ObjectChecker] = None) {
 
@@ -49,6 +50,8 @@ object ObjectIdCleaner {
     lazy val treeBlobsCleaner = Function.chain(treeBlobsCleaners)
 
     lazy val treeSubtreesCleaner:Cleaner[TreeSubtrees] = Function.chain(treeSubtreesCleaners)
+
+    lazy val baseTreeSubtreesCleaner:Cleaner[TreeSubtrees] = Function.chain(treeSubtreesCleaners ++ baseTreeSubtreesCleaners)
   }
 
 }
@@ -72,6 +75,7 @@ class ObjectIdCleaner(config: ObjectIdCleaner.Config, objectDB: ObjectDatabase, 
   val tagMemo: Memo[ObjectId, ObjectId] = MemoUtil.concurrentCleanerMemo()
 
   val treeMemo: Memo[ObjectId, ObjectId] = MemoUtil.concurrentCleanerMemo(protectedObjectCensus.treeIds.toSet[ObjectId])
+  val baseTreeMemo: Memo[ObjectId, ObjectId] = MemoUtil.concurrentCleanerMemo(protectedObjectCensus.treeIds.toSet[ObjectId])
 
   def apply(objectId: ObjectId): ObjectId = memoClean(objectId)
 
@@ -80,13 +84,13 @@ class ObjectIdCleaner(config: ObjectIdCleaner.Config, objectDB: ObjectDatabase, 
   }
 
   def cleanedObjectMap(): Map[ObjectId, ObjectId] =
-    Seq(memoClean, cleanCommit, cleanTag, cleanTree).map(_.asMap()).reduce(_ ++ _)
+    Seq(memoClean, cleanCommit, cleanTag, baseCleanTree).map(_.asMap()).reduce(_ ++ _)
 
   def uncachedClean: (ObjectId) => ObjectId = {
     objectId =>
       threadLocalResources.reader().open(objectId).getType match {
         case OBJ_COMMIT => cleanCommit(objectId)
-        case OBJ_TREE => cleanTree(objectId)
+        case OBJ_TREE => cleanTree(baseCleanTree(objectId))
         case OBJ_TAG => cleanTag(objectId)
         case _ => objectId // we don't currently clean isolated blobs... only clean within a tree context
       }
@@ -121,6 +125,14 @@ class ObjectIdCleaner(config: ObjectIdCleaner.Config, objectDB: ObjectDatabase, 
   val cleanBlob: Cleaner[ObjectId] = identity // Currently a NO-OP, we only clean at treeblob level
 
   val cleanTree: MemoFunc[ObjectId, ObjectId] = treeMemo { originalObjectId =>
+    fixTree(false, originalObjectId)
+  }
+
+  val baseCleanTree: MemoFunc[ObjectId, ObjectId] = baseTreeMemo { originalObjectId =>
+    fixTree(true, originalObjectId)
+  }
+
+  def fixTree(base: Boolean, originalObjectId: ObjectId): ObjectId = {
     val entries = Tree.entriesFor(originalObjectId)(threadLocalResources.reader())
     val cleanedTreeEntries = treeEntryListCleaner(entries)
 
@@ -128,7 +140,8 @@ class ObjectIdCleaner(config: ObjectIdCleaner.Config, objectDB: ObjectDatabase, 
 
     val originalBlobs = tree.blobs
     val fixedTreeBlobs = treeBlobsCleaner(originalBlobs)
-    val cleanedSubtrees = TreeSubtrees(treeSubtreesCleaner(tree.subtrees).entryMap.map {
+    val subtrees = if(base) baseTreeSubtreesCleaner(tree.subtrees) else treeSubtreesCleaner(tree.subtrees)
+    val cleanedSubtrees = TreeSubtrees(subtrees.entryMap.map {
       case (name, treeId) => (name, cleanTree(treeId))
     }).withoutEmptyTrees
 
@@ -181,6 +194,6 @@ class ObjectIdCleaner(config: ObjectIdCleaner.Config, objectDB: ObjectDatabase, 
     }.toList
   }
 
-  def stats() = Map("apply"->memoClean.stats(), "tree" -> cleanTree.stats(), "commit" -> cleanCommit.stats(), "tag" -> cleanTag.stats())
+  def stats() = Map("apply"->memoClean.stats(), "tree" -> cleanTree.stats(), "base" -> baseCleanTree.stats(), "commit" -> cleanCommit.stats(), "tag" -> cleanTag.stats())
 
 }

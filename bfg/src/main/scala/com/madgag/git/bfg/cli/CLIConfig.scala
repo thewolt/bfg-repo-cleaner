@@ -74,6 +74,9 @@ object CLIConfig {
     fileMatcher("delete-folders").text("delete folders with the specified names (eg '.svn', '*-tmp' - matches on folder name, not path within repo)").action {
       (v, c) => c.copy(deleteFolders = Some(v))
     }
+    fileMatcher("keep-folders").text("list the base folders of the repository").action {
+      (v, c) => c.copy(keepFolders = Some(v))
+    }
     opt[String]("convert-to-git-lfs").text("extract files with the specified names (eg '*.{zip,mp4}') into Git LFS").action {
       (v, c) => c.copy(lfsConversion = Some(v))
     }
@@ -133,6 +136,7 @@ case class CLIConfig(stripBiggestBlobs: Option[Int] = None,
                      protectBlobsFromRevisions: Set[String] = Set("HEAD"),
                      deleteFiles: Option[TextMatcher] = None,
                      deleteFolders: Option[TextMatcher] = None,
+                     keepFolders: Option[TextMatcher] = None,
                      pruneEmptyCommits: Boolean = false,
                      fixFilenameDuplicatesPreferring: Option[Ordering[FileMode]] = None,
                      fixCRLF: Option[TextMatcher] = None,
@@ -161,6 +165,12 @@ case class CLIConfig(stripBiggestBlobs: Option[Int] = None,
   lazy val folderDeletion: Option[Cleaner[TreeSubtrees]] = deleteFolders.map {
     textMatcher => { subtrees: TreeSubtrees =>
       TreeSubtrees(subtrees.entryMap.filterKeys(filename => !textMatcher(filename)))
+    }
+  }
+
+  lazy val keepBaseFolder: Option[Cleaner[TreeSubtrees]] = keepFolders.map {
+    textMatcher => { subtrees: TreeSubtrees =>
+      TreeSubtrees(subtrees.entryMap.filterKeys(filename => textMatcher(filename)))
     }
   }
 
@@ -247,6 +257,7 @@ case class CLIConfig(stripBiggestBlobs: Option[Int] = None,
       treeEntryListCleaners,
       treeBlobCleaners,
       folderDeletion.toSeq,
+      keepBaseFolder.toSeq,
       objectChecker
     )
 
